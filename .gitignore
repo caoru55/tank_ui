@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+/app/test/
 
 # production
 /build
@@ -45,3 +46,11 @@ node_modules/
 .next/
 .env
 *.log
+
+# VS Code
+.vscode/
+*.code-workspace
+launch.json
+tasks.json
+settings.json
+extensions.json

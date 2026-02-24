@@ -71,13 +71,11 @@ export const useTankStore = create<TankStore>((set) => ({
   isLoading: false,
   errorMessage: null,
   fetchStatuses: async () => {
+    console.log("fetchStatuses start") // ← ここにブレーク
     set({ isLoading: true, errorMessage: null })
 
-    const baseUrl =
-      process.env.NEXT_PUBLIC_FLASK_API_BASE_URL?.replace(/\/$/, '') || 'http://163.44.121.247:5000'
-
     try {
-      const response = await fetch(`${baseUrl}/api/tanks/statuses`, {
+      const response = await fetch('/api/tanks/statuses', {
         method: 'GET',
         headers: {
           Accept: 'application/json',

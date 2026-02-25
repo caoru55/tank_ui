@@ -3,6 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+const AUTH_SIGNIN_ENDPOINT =
+  (process.env.NEXT_PUBLIC_AUTH_SIGNIN_ENDPOINT && process.env.NEXT_PUBLIC_AUTH_SIGNIN_ENDPOINT.trim()) ||
+  "/auth/api/auth:signIn";
+
 export default function Page() {
   const router = useRouter();
 
@@ -32,28 +36,41 @@ export default function Page() {
     setMessage("ログイン中…");
 
     try {
-      const res = await fetch("http://163.44.121.247:8080/api/auth:signIn", {
+      const res = await fetch(AUTH_SIGNIN_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      const json = await res.json();
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        setMessage(`ログインAPIエラー: ${res.status}${text ? ` ${text}` : ""}`);
+        return;
+      }
 
-      if (!json.data?.token) {
+      const json = await res.json().catch(() => null as unknown);
+
+      if (!json || typeof json !== "object") {
+        setMessage("ログインAPIの応答形式が不正です");
+        return;
+      }
+
+      if (!("data" in json) || !(json as { data?: { token?: string; user?: unknown } }).data?.token) {
         setMessage("ログイン失敗：メールかパスワードが違います");
         return;
       }
 
+      const data = (json as { data: { token: string; user: unknown } }).data;
+
       // JWT を localStorage に保存
-      localStorage.setItem("jwt", json.data.token);
-      localStorage.setItem("user", JSON.stringify(json.data.user));
+      localStorage.setItem("jwt", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
 
       // 🔥 ログイン成功 → /qr-register に遷移
       router.replace("/qr-register");
     } catch {
-      setMessage("通信エラーが発生しました");
+      setMessage(`通信エラーが発生しました（接続先: ${AUTH_SIGNIN_ENDPOINT}）`);
     }
   
     

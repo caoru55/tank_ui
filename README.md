@@ -19,12 +19,24 @@ Required variables:
 
 ```env
 NEXT_PUBLIC_FLASK_API_BASE_URL=http://163.44.121.247:5000
+NEXT_PUBLIC_AUTH_SIGNIN_ENDPOINT=/auth/api/auth:signIn
 NEXT_PUBLIC_FILLING_STATION_LAT=
 NEXT_PUBLIC_FILLING_STATION_LNG=
 ```
 
 - `NEXT_PUBLIC_FLASK_API_BASE_URL`: Base URL of Flask backend used by static client fetches.
+- `NEXT_PUBLIC_AUTH_SIGNIN_ENDPOINT`: Login API endpoint. For HTTPS production, use same-origin reverse proxy path.
 - `NEXT_PUBLIC_FILLING_STATION_LAT` / `NEXT_PUBLIC_FILLING_STATION_LNG`: Coordinates for exception-transition distance checks.
+
+Example Nginx route for login API proxy (HTTP upstream on same host):
+
+```nginx
+location /auth/ {
+	proxy_pass http://127.0.0.1:8080/;
+	proxy_set_header Host $host;
+	proxy_set_header X-Real-IP $remote_addr;
+}
+```
 
 ## Static Export (Next.js 16)
 

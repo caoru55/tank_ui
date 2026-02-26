@@ -1,5 +1,5 @@
 type MovementQueueItem = {
-  payload: Record<string, string[]>
+  payload: Record<string, unknown>
   token: string
   queuedAt: string
 }

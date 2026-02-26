@@ -206,7 +206,11 @@ export const useTankStore = create<TankStore>((set, get) => ({
       }
     }
 
-    const payload = buildPayload(operation, tankNumber)
+    const payload = {
+      ...buildPayload(operation, tankNumber),
+      gps_lat: gps?.lat,
+      gps_lng: gps?.lng,
+    }
     const token = state.jwtToken ?? (typeof window !== 'undefined' ? window.localStorage.getItem('jwt') : null)
 
     if (!token) {

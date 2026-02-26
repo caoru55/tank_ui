@@ -7,7 +7,7 @@ import { OPERATION_COLORS } from '@/src/store/operationTheme'
 import { playBeep } from '@/src/store/playBeep'
 import { parseQrCode, verifyCrc16 } from '@/src/store/qrCode'
 import { UI } from '@/src/store/uiTheme'
-import type { GPSLocation, TankOperation } from '@/src/store/determineTransition'
+import type { TankOperation } from '@/src/store/determineTransition'
 
 type QRScannerProps = {
   operation: TankOperation
@@ -34,23 +34,9 @@ export default function QRScannerPanel({ operation }: QRScannerProps) {
   const transitionStatus = useTankStore((s) => s.transitionStatus)
   const setLastScannedTank = useTankStore((s) => s.setLastScannedTank)
   const setErrorMessage = useTankStore((s) => s.setErrorMessage)
-  const [gps, setGps] = useState<GPSLocation>(null)
   const [isCooldown, setIsCooldown] = useState(false)
   const cooldownRef = useRef(false)
   const clearTimerRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGps({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        })
-      },
-      () => setGps(null),
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 8000 },
-    )
-  }, [])
 
   useEffect(() => {
     return () => {
@@ -86,7 +72,7 @@ export default function QRScannerPanel({ operation }: QRScannerProps) {
     setIsCooldown(true)
     setLastScannedTank(scannedRaw ?? tankNumber)
 
-    await transitionStatus(tankNumber, operation, gps)
+    await transitionStatus(tankNumber)
 
     const { errorMessage, lastTransition } = useTankStore.getState()
 

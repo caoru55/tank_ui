@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { buildPayload } from './buildPayload'
-import { calcDistance } from './calcDistance'
-import { determineTransition, type GPSLocation, type TankOperation, type TankState, type TransitionResult } from './determineTransition'
+import { determineTransition, type TankOperation, type TankState, type TransitionResult } from './determineTransition'
 import { enqueueMovement, isLikelyOfflineError } from './offlineQueue'
 import { postMovement } from './postMovement'
 
@@ -26,23 +25,6 @@ export type LastTransition = {
   exceptionType: string | null
 }
 
-const parseCoordinate = (value: string | undefined): number | null => {
-  if (typeof value !== 'string') {
-    return null
-  }
-
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-const fillingStationLat = parseCoordinate(process.env.NEXT_PUBLIC_FILLING_STATION_LAT)
-const fillingStationLng = parseCoordinate(process.env.NEXT_PUBLIC_FILLING_STATION_LNG)
-
-const FILLING_STATION_LOCATION =
-  fillingStationLat !== null && fillingStationLng !== null
-    ? { lat: fillingStationLat, lng: fillingStationLng }
-    : null
-
 const TANK_STATUSES_ENDPOINT = '/api/tanks/statuses'
 
 const createEmptyStatuses = (): TankStatuses => ({
@@ -58,6 +40,25 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const getErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback
+
+const getCurrentGps = async (): Promise<{ lat: number; lng: number }> => {
+  if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+    throw new Error('GPS が利用できません')
+  }
+
+  return await new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        })
+      },
+      () => reject(new Error('GPS の取得に失敗しました')),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 8000 },
+    )
+  })
+}
 
 const findTankState = (statuses: TankStatuses, tankNumber: string): TankState | null => {
   for (const key of TANK_STATUS_KEYS) {
@@ -113,12 +114,17 @@ type TankStore = {
   lastTransition: LastTransition | null
   logs: LastTransition[]
   lastScannedTank: string | null
+  currentOperation: TankOperation
+  scannedTanks: string[]
   setJwtToken: (token: string | null) => void
   setErrorMessage: (message: string | null) => void
   addLog: (entry: LastTransition) => void
   setLastScannedTank: (tank: string | null) => void
+  setCurrentOperation: (operation: TankOperation) => void
   fetchStatuses: () => Promise<void>
-  transitionStatus: (tankNumber: string, operation: TankOperation, gps: GPSLocation) => Promise<void>
+  transitionStatus: (tankNumber: string) => Promise<void>
+  addScannedTank: (tankNumber: string) => void
+  sendQueue: () => Promise<void>
 }
 
 export const useTankStore = create<TankStore>((set, get) => ({
@@ -130,6 +136,8 @@ export const useTankStore = create<TankStore>((set, get) => ({
   lastTransition: null,
   logs: [],
   lastScannedTank: null,
+  currentOperation: 'retrieve_tanks',
+  scannedTanks: [],
   setJwtToken: (token) => {
     set({ jwtToken: token })
   },
@@ -143,6 +151,9 @@ export const useTankStore = create<TankStore>((set, get) => ({
   },
   setLastScannedTank: (tank) => {
     set({ lastScannedTank: tank })
+  },
+  setCurrentOperation: (operation) => {
+    set({ currentOperation: operation })
   },
   fetchStatuses: async () => {
     set({ isLoading: true, errorMessage: null })
@@ -170,8 +181,9 @@ export const useTankStore = create<TankStore>((set, get) => ({
       set({ isLoading: false, errorMessage: message })
     }
   },
-  transitionStatus: async (tankNumber: string, operation: TankOperation, gps: GPSLocation) => {
+  transitionStatus: async (tankNumber: string) => {
     const state = get()
+    const operation = state.currentOperation
 
     if (!state.statuses) {
       set({ errorMessage: 'タンク状態が未取得です。先に状態を取得してください。' })
@@ -192,25 +204,36 @@ export const useTankStore = create<TankStore>((set, get) => ({
       return
     }
 
-    if (!transition.isNormal) {
-      if (!FILLING_STATION_LOCATION) {
-        set({ errorMessage: '充填所の座標が未設定です。環境変数を設定してください。' })
-        return
-      }
-
-      const distance = calcDistance(gps, FILLING_STATION_LOCATION)
-
-      if (distance > 50) {
-        set({ errorMessage: `例外遷移「${transition.exceptionType}」は充填所の半径50m以内でのみ許可されます` })
-        return
-      }
+    const nextLog: LastTransition = {
+      tank: tankNumber,
+      from: currentState,
+      to: transition.nextState,
+      operation,
+      timestamp: new Date().toISOString(),
+      isNormal: transition.isNormal,
+      exceptionType: transition.exceptionType,
     }
 
-    const payload = {
-      ...buildPayload(operation, tankNumber),
-      gps_lat: gps?.lat,
-      gps_lng: gps?.lng,
+    set((prev) => ({
+      errorMessage: null,
+      lastTransition: nextLog,
+      scannedTanks: [...prev.scannedTanks, tankNumber],
+    }))
+
+    get().addLog(nextLog)
+  },
+  addScannedTank: (tankNumber) => {
+    set((state) => ({
+      scannedTanks: [...state.scannedTanks, tankNumber],
+    }))
+  },
+  sendQueue: async () => {
+    const state = get()
+
+    if (state.scannedTanks.length === 0) {
+      return
     }
+
     const token = state.jwtToken ?? (typeof window !== 'undefined' ? window.localStorage.getItem('jwt') : null)
 
     if (!token) {
@@ -222,27 +245,30 @@ export const useTankStore = create<TankStore>((set, get) => ({
       set({ jwtToken: token })
     }
 
-    const nextLog: LastTransition = {
-      tank: tankNumber,
-      from: currentState,
-      to: transition.nextState,
-      operation,
-      timestamp: new Date().toISOString(),
-      isNormal: transition.isNormal,
-      exceptionType: transition.exceptionType,
+    let gps: { lat: number; lng: number }
+    try {
+      gps = await getCurrentGps()
+    } catch (error) {
+      set({ errorMessage: getErrorMessage(error, 'GPS の取得に失敗しました') })
+      return
     }
+
+    const payload = buildPayload(state.currentOperation, state.scannedTanks, {
+      gps_lat: gps.lat,
+      gps_lng: gps.lng,
+    })
+
+    const queuedAt = new Date().toISOString()
 
     try {
       await postMovement(payload, token)
     } catch (error) {
       if (isLikelyOfflineError(error)) {
         try {
-          await enqueueMovement({ payload, token, queuedAt: nextLog.timestamp })
+          await enqueueMovement({ payload, token, queuedAt })
           set({
             errorMessage: 'オフラインのためキューに保存しました。オンライン復帰後に同期されます。',
-            lastTransition: nextLog,
           })
-          get().addLog(nextLog)
           return
         } catch {
           set({ errorMessage: 'オフラインキューへの保存に失敗しました' })
@@ -254,13 +280,11 @@ export const useTankStore = create<TankStore>((set, get) => ({
       return
     }
 
-    await get().fetchStatuses()
-
     set({
+      scannedTanks: [],
       errorMessage: null,
-      lastTransition: nextLog,
     })
 
-    get().addLog(nextLog)
+    await get().fetchStatuses()
   },
 }))

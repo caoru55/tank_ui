@@ -1,7 +1,12 @@
 import type { TankOperation } from './determineTransition'
 
-export function buildPayload(operation: TankOperation, tankNumber: string): Record<string, string[]> {
+export function buildPayload(
+  operation: TankOperation,
+  tanks: string[],
+  extraFields?: Record<string, unknown>
+): Record<string, unknown> {
   return {
-    [operation]: [tankNumber],
+    [operation]: tanks,
+    ...(extraFields ?? {}),
   }
 }

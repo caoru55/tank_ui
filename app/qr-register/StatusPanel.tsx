@@ -6,6 +6,7 @@ import { UI } from '@/src/store/uiTheme'
 export default function StatusPanel() {
   const errorMessage = useTankStore((s) => s.errorMessage)
   const last = useTankStore((s) => s.lastTransition)
+  const queuedCount = useTankStore((s) => s.scannedTanks.length)
 
   if (errorMessage) {
     return (
@@ -18,7 +19,8 @@ export default function StatusPanel() {
           boxShadow: UI.shadow,
         }}
       >
-        {errorMessage}
+        <div>{errorMessage}</div>
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>送信待ち: {queuedCount} 件</div>
       </div>
     )
   }
@@ -38,13 +40,15 @@ export default function StatusPanel() {
           {last.tank} : {last.from} → {last.to}
         </div>
         <div>{last.isNormal ? '正常遷移' : `例外遷移 (${last.exceptionType})`}</div>
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>送信待ち: {queuedCount} 件</div>
       </div>
     )
   }
 
   return (
     <div style={{ borderRadius: UI.radius, padding: 12, background: '#f6f6f6', boxShadow: UI.shadow }}>
-      QR を読み取ってください
+      <div>QR を読み取ってください</div>
+      <div style={{ marginTop: 6, fontSize: 12, color: '#666' }}>送信待ち: {queuedCount} 件</div>
     </div>
   )
 }

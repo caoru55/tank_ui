@@ -25,8 +25,12 @@ export default function QRRegisterPage() {
   const router = useRouter()
   const [operation, setOperation] = useState<TankOperation>('retrieve_tanks')
   const [isAuthReady, setIsAuthReady] = useState(false)
+  const [isSending, setIsSending] = useState(false)
   const fetchStatuses = useTankStore((s) => s.fetchStatuses)
   const setJwtToken = useTankStore((s) => s.setJwtToken)
+  const setCurrentOperation = useTankStore((s) => s.setCurrentOperation)
+  const sendQueue = useTankStore((s) => s.sendQueue)
+  const scannedTanks = useTankStore((s) => s.scannedTanks)
 
   const themeColor = useMemo(() => OPERATION_COLORS[operation], [operation])
 
@@ -49,9 +53,10 @@ export default function QRRegisterPage() {
     }
 
     setJwtToken(token)
+    setCurrentOperation(operation)
     void fetchStatuses()
     setIsAuthReady(true)
-  }, [fetchStatuses, router, setJwtToken])
+  }, [fetchStatuses, operation, router, setCurrentOperation, setJwtToken])
 
   if (!isAuthReady) {
     return <p style={{ padding: 20 }}>認証状態を確認中…</p>
@@ -59,7 +64,21 @@ export default function QRRegisterPage() {
 
   const handleModeChange = (op: TankOperation) => {
     setOperation(op)
+    setCurrentOperation(op)
     speak(OPERATION_VOICE[op])
+  }
+
+  const handleSendQueue = async () => {
+    if (isSending || scannedTanks.length === 0) {
+      return
+    }
+
+    setIsSending(true)
+    try {
+      await sendQueue()
+    } finally {
+      setIsSending(false)
+    }
   }
 
   return (
@@ -108,6 +127,27 @@ export default function QRRegisterPage() {
         <StatusPanel />
         <div style={{ marginTop: 12 }}>
           <QRScannerPanel operation={operation} />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <button
+            onClick={() => void handleSendQueue()}
+            disabled={isSending || scannedTanks.length === 0}
+            style={{
+              width: '100%',
+              padding: '12px 18px',
+              borderRadius: UI.radius,
+              border: 'none',
+              background: themeColor,
+              color: '#fff',
+              boxShadow: UI.shadow,
+              opacity: isSending || scannedTanks.length === 0 ? 0.6 : 1,
+              cursor: isSending || scannedTanks.length === 0 ? 'not-allowed' : 'pointer',
+              fontSize: 18,
+              fontWeight: 700,
+            }}
+          >
+            {isSending ? '送信中…' : `一括送信 (${scannedTanks.length})`}
+          </button>
         </div>
       </div>
 

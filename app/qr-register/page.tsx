@@ -21,12 +21,32 @@ const modes: TankOperation[] = ['use_tanks', 'retrieve_tanks', 'refill_tanks', '
 export default function QRRegisterPage() {
   const router = useRouter()
   const [operation, setOperation] = useState<TankOperation>('retrieve_tanks')
-  const [isAuthReady, setIsAuthReady] = useState(false)
   const fetchStatuses = useTankStore((s) => s.fetchStatuses)
   const setJwtToken = useTankStore((s) => s.setJwtToken)
   const setCurrentOperation = useTankStore((s) => s.setCurrentOperation)
+  const scannedTanks = useTankStore((s) => s.scannedTanks)
 
   const themeColor = useMemo(() => OPERATION_COLORS[operation], [operation])
+
+  const isAuthReady = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+
+    const token = window.localStorage.getItem('jwt')
+    const user = window.localStorage.getItem('user')
+
+    if (!token || !user) {
+      return false
+    }
+
+    try {
+      JSON.parse(user)
+      return true
+    } catch {
+      return false
+    }
+  }, [])
 
   useEffect(() => {
     const token = window.localStorage.getItem('jwt')
@@ -49,7 +69,6 @@ export default function QRRegisterPage() {
     setJwtToken(token)
     setCurrentOperation(operation)
     void fetchStatuses()
-    setIsAuthReady(true)
   }, [fetchStatuses, operation, router, setCurrentOperation, setJwtToken])
 
   if (!isAuthReady) {
@@ -57,6 +76,19 @@ export default function QRRegisterPage() {
   }
 
   const handleModeChange = (op: TankOperation) => {
+    if (op === operation) {
+      return
+    }
+
+    if (scannedTanks.length > 0) {
+      const ok = window.confirm('操作モードを切り替えてもよろしいですか？\n注意：読み取ったタンク一覧は消去されます。')
+      if (!ok) {
+        return
+      }
+
+      useTankStore.setState({ scannedTanks: [] })
+    }
+
     setOperation(op)
     setCurrentOperation(op)
     speak(OPERATION_VOICE[op])

@@ -1,0 +1,57 @@
+# Sound Assets
+
+This project uses a structured naming and directory convention for sound assets,
+designed to support future "theme switching" (sound skinning) while keeping the
+Next.js codebase simple and maintainable.
+
+## Directory Structure
+
+All sound files are stored under `public/sounds/`, following Next.js conventions
+for static assets.
+
+public/
+  sounds/
+    default/
+      success.mp3
+      error.mp3
+
+
+- `default/` is the standard theme.
+- Additional themes can be added as new directories (e.g., `retro/`, `ocean/`).
+
+## File Naming Rules
+
+Sound files are named by *role*, not by theme.  
+This keeps the application logic stable even when themes change.
+
+- `success.mp3` — QR scan success sound  
+- `error.mp3` — QR scan error sound  
+
+All themes must provide files with the same names.
+
+## Sound Specification (default theme)
+
+The default theme sound files follow a unified audio profile:
+
+- Total length: **700ms**
+- Tail: **100ms fade-out**
+- Volume: **normalized to -1dB**
+- Success sound: bright tone (2–4kHz)
+- Error sound: short, sharp tone (300–800Hz)
+
+These settings are optimized for rapid QR code scanning and clear distinction
+between normal and abnormal transitions.
+
+## Source of Original Sound Materials
+
+The default theme is based on copyright-free sound materials from:
+
+- **効果音ラボ (Sound Effect Lab)**  
+  https://soundeffect-lab.info/
+
+Processing applied:
+- Length adjustment
+- Fade-out
+- Normalization
+- Minor noise cleanup
+
